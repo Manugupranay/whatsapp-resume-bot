@@ -4,6 +4,7 @@ Powered by Twilio WhatsApp API + Claude AI
 """
 
 import os
+import base64
 import tempfile
 import traceback
 import threading
@@ -24,13 +25,14 @@ twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 _temp_files = {}
 
 
-def send_whatsapp_message(to, body, media_url=None):
+def send_whatsapp_message(to, body):
     print(f"[BOT] Sending message to {to}: {body[:80]}")
-    kwargs = {"from_": TWILIO_WHATSAPP_NUMBER, "to": to, "body": body}
-    if media_url:
-        kwargs["media_url"] = [media_url]
     try:
-        msg = twilio_client.messages.create(**kwargs)
+        msg = twilio_client.messages.create(
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=to,
+            body=body
+        )
         print(f"[BOT] Message sent! SID: {msg.sid}")
     except Exception as e:
         print(f"[ERROR] Failed to send message: {e}")
@@ -78,6 +80,10 @@ def process_jd(sender, jd_text):
         docx_bytes = generate_docx(tailored)
         print(f"[PROCESS] DOCX generated! Size: {len(docx_bytes)} bytes")
 
+        keywords = tailored.get("keywords_matched", [])
+        keywords_str = ", ".join(keywords[:10]) if keywords else "N/A"
+
+        # Save file and get download URL
         file_id = f"resume_{sender.replace('whatsapp:+', '')}_{os.getpid()}.docx"
         file_path = os.path.join(tempfile.gettempdir(), file_id)
         with open(file_path, "wb") as f:
@@ -85,30 +91,31 @@ def process_jd(sender, jd_text):
         _temp_files[file_id] = file_path
         print(f"[PROCESS] File saved: {file_path}")
 
-        base_url = os.environ.get("BASE_URL", "http://localhost:5000")
-        media_url = f"{base_url}/files/{file_id}"
-        print(f"[PROCESS] Media URL: {media_url}")
-
-        keywords = tailored.get("keywords_matched", [])
-        keywords_str = ", ".join(keywords[:10]) if keywords else "N/A"
+        base_url = os.environ.get("BASE_URL", "http://localhost:8080").rstrip("/")
+        download_url = f"{base_url}/files/{file_id}"
 
         summary = (
-            f"✅ *Resume tailored!*\n\n"
+            f"✅ *Resume tailored for Pranay Manugu!*\n\n"
             f"🎯 *Keywords matched:* {keywords_str}\n\n"
-            f"📄 Resume attached as DOCX — ready to send!"
+            f"📄 *Download your resume here:*\n{download_url}"
         )
 
-        send_whatsapp_message(sender, summary + "\n\n📥 Download: " + media_url)
+        send_whatsapp_message(sender, summary)
         print("[PROCESS] All done!")
 
     except Exception as e:
         print(f"[ERROR] process_jd failed: {e}")
         traceback.print_exc()
-        send_whatsapp_message(sender, f"Sorry, something went wrong: {str(e)[:200]}")
+        try:
+            send_whatsapp_message(sender, f"Sorry, something went wrong. Please try again.")
+        except:
+            pass
 
 
 @app.route("/files/<file_id>")
 def serve_file(file_id):
+    # Clean the file_id in case it has extra path components
+    file_id = os.path.basename(file_id)
     path = _temp_files.get(file_id)
     if not path or not os.path.exists(path):
         abort(404)
@@ -126,7 +133,7 @@ def health():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8080))
     print(f"🤖 Resume Bot running on port {port}")
     print(f"📱 Webhook URL: http://localhost:{port}/webhook")
     app.run(debug=False, host="0.0.0.0", port=port)
