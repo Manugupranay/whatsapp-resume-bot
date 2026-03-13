@@ -97,7 +97,7 @@ def process_jd(sender, jd_text):
         summary = (
             f"✅ *Resume tailored for Pranay Manugu!*\n\n"
             f"🎯 *Keywords matched:* {keywords_str}\n\n"
-            f"📄 *Download your resume here:*\n{download_url}"
+            f"📄 Download: {download_url}"
         )
 
         send_whatsapp_message(sender, summary)
