@@ -98,7 +98,7 @@ def process_jd(sender, jd_text):
             f"📄 Resume attached as DOCX — ready to send!"
         )
 
-        send_whatsapp_message(sender, summary, media_url=media_url)
+        send_whatsapp_message(sender, summary + "\n\n📥 Download: " + media_url)
         print("[PROCESS] All done!")
 
     except Exception as e:
